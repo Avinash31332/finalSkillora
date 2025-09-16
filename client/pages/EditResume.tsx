@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { fetchMyResume, upsertMyResume, Resume } from "@/lib/resume.service";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { useProfile } from "@/contexts/ProfileContext";
 
 type FormState = {
   full_name: string;
@@ -26,6 +27,7 @@ type FormState = {
 };
 
 export default function EditResumePage() {
+  const { profile, updateProfile } = useProfile();
   const [form, setForm] = useState<FormState>({
     full_name: "",
     headline: "",
@@ -42,6 +44,7 @@ export default function EditResumePage() {
     certifications: "",
   });
   const [saving, setSaving] = useState(false);
+  const [mySkills, setMySkills] = useState<string>("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -65,9 +68,13 @@ export default function EditResumePage() {
           certifications: (existing.certifications || []).map(c => [c.name, c.issuer, c.year].filter(Boolean).join(" | ")).join("\n"),
         });
       }
+      // Prefill skills from profile
+      if (mounted && profile?.skills_i_have) {
+        setMySkills((profile.skills_i_have as string[]).join(", "));
+      }
     })();
     return () => { mounted = false };
-  }, []);
+  }, [profile]);
 
   const update = (key: keyof FormState, value: string) => setForm(prev => ({ ...prev, [key]: value }));
 
@@ -115,6 +122,14 @@ export default function EditResumePage() {
         }),
       };
       await upsertMyResume(resume);
+      // Update profile skills_i_have
+      const parsedSkills = mySkills
+        .split(/[,\n]+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+      if (parsedSkills.length > 0) {
+        await updateProfile({ skills_i_have: parsedSkills as any });
+      }
       // Simulate AI crafting time for a more professional experience
       await new Promise((r) => setTimeout(r, 1400));
       navigate("/resume");
@@ -189,6 +204,12 @@ export default function EditResumePage() {
               <div>
                 <Label>Technical Skills (one per line: Section: item1, item2, item3)</Label>
                 <Textarea value={form.skills} onChange={e => update("skills", e.target.value)} rows={4} />
+              </div>
+
+              <div>
+                <Label>My Skills (comma or line separated)</Label>
+                <Textarea value={mySkills} onChange={e => setMySkills(e.target.value)} rows={3} />
+                <p className="mt-1 text-xs text-slate-500">This also updates your profile’s skills.</p>
               </div>
 
               <div>

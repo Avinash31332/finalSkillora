@@ -4,13 +4,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useEffect, useState } from "react";
 import { fetchMyResume, Resume } from "@/lib/resume.service";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/contexts/ProfileContext";
 import { useNavigate } from "react-router-dom";
-import { Briefcase, GraduationCap, Cpu, Trophy, Award, FolderGit2, Mail, Phone, MapPin, Link2 } from "lucide-react";
+import { Briefcase, GraduationCap, Cpu, Trophy, Award, FolderGit2, Mail, Phone, MapPin, Link2, Sparkles } from "lucide-react";
+import { usePosts } from "@/contexts/PostsContext";
 
 export default function ResumePage() {
   const { isAuthenticated } = useAuth();
+  const { profile } = useProfile();
+  const { posts, refreshPosts } = usePosts();
   const [resume, setResume] = useState<Resume | null>(null);
   const [loading, setLoading] = useState(true);
+  const [smartLoading, setSmartLoading] = useState(false);
+  const [smartOpen, setSmartOpen] = useState(false);
+  const [smartResults, setSmartResults] = useState<{ id: string; score: number; matched: string[] }[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -73,6 +80,46 @@ export default function ResumePage() {
   const parts = (resume.full_name || "").trim().split(/\s+/);
   const initials = parts.slice(0, 2).map(p => p.charAt(0).toUpperCase()).join("") || "U";
 
+  function tokenize(values: string[]): string[] {
+    return Array.from(new Set(values
+      .flatMap(v => v.split(/[\s,\/\-]+/))
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean)));
+  }
+
+  function computeSmartTrades() {
+    setSmartOpen(true);
+    setSmartLoading(true);
+    // Ensure we have latest posts
+    refreshPosts();
+    const skillSections = resume.technical_skills || [];
+    const resumeSkills = skillSections.flatMap(s => s.items || []);
+    const mySkills = Array.isArray(profile?.skills_i_have) ? (profile!.skills_i_have as string[]) : [];
+    const allSkillTokens = tokenize([...resumeSkills, ...mySkills]);
+
+    const results = posts.map(p => {
+      const postSkills = [
+        ...(p.skills_offered || []),
+        ...(p.skills_needed || []),
+        p.title || "",
+        p.content || ""
+      ];
+      const postTokens = tokenize(postSkills);
+      const matched = allSkillTokens.filter(t => postTokens.some(pt => pt.includes(t) || t.includes(pt)));
+      const score = matched.length / Math.max(1, allSkillTokens.length);
+      return { id: p.id, score, matched };
+    })
+    .filter(r => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20);
+
+    // small delay to feel deliberate
+    setTimeout(() => {
+      setSmartResults(results);
+      setSmartLoading(false);
+    }, 700);
+  }
+
   return (
     <div>
       <Header />
@@ -80,6 +127,10 @@ export default function ResumePage() {
         <div className="flex justify-end gap-2 mb-6 print:hidden">
           <Button variant="outline" onClick={() => window.print()}>Download / Print</Button>
           <Button onClick={() => navigate("/resume/edit")}>Edit</Button>
+          <Button onClick={computeSmartTrades} className="bg-indigo-600 hover:bg-indigo-700 text-white inline-flex items-center gap-2">
+            <Sparkles size={16} />
+            Smart Trades
+          </Button>
         </div>
 
         {/* Resume Canvas */}
@@ -296,10 +347,98 @@ export default function ResumePage() {
                   ) : null}
                 </div>
               </section>
+
+              {/* My Skills from profile */}
+              {Array.isArray(profile?.skills_i_have) && (profile!.skills_i_have as string[]).length > 0 ? (
+                <section>
+                  <div className="flex items-center gap-2">
+                    <Cpu size={14} className="text-indigo-700" />
+                    <h2 className="text-xs font-semibold tracking-wider uppercase text-indigo-700">My Skills</h2>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {(profile!.skills_i_have as string[]).map((s, i) => (
+                      <span key={i} className="px-2 py-0.5 text-[11px] rounded-md bg-gradient-to-br from-indigo-50 to-white text-indigo-900 border border-indigo-100 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.12)]">{s}</span>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </aside>
           </div>
         </div>
       </div>
+
+      {/* Smart Trades Drawer */}
+      {smartOpen && (
+        <div className="fixed inset-0 z-50 print:hidden" role="dialog" aria-modal>
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSmartOpen(false)} />
+          <div className="absolute inset-0 bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden">
+            <div className="px-6 pt-5 pb-4 border-b flex items-center justify-between sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-2 text-indigo-700 font-semibold">
+                <Sparkles size={18} /> Smart Trades
+              </div>
+              <Button variant="ghost" onClick={() => setSmartOpen(false)}>Close</Button>
+            </div>
+
+            <div className="p-6 overflow-y-auto h-full">
+              {smartLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-slate-700">
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-400 animate-pulse mb-3" />
+                  <div className="h-2 w-40 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full w-1/3 animate-[loading_1.4s_ease-in-out_infinite] bg-gradient-to-r from-indigo-400 via-indigo-600 to-indigo-400" />
+                  </div>
+                  <p className="mt-3 text-sm">Scanning posts and matching your skills…</p>
+                </div>
+              ) : smartResults.length === 0 ? (
+                <div className="text-center text-sm text-slate-600">No close matches yet. Try adding more specific skills.</div>
+              ) : (
+                <div className="mx-auto w-full max-w-6xl space-y-4">
+                  {smartResults.map((r) => {
+                    const post = posts.find(p => p.id === r.id)!;
+                    return (
+                      <div key={r.id} className="border rounded-xl p-5 hover:bg-slate-50">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={post.user?.profile_picture || "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&h=80&fit=crop&crop=faces"}
+                                alt={post.user?.name || "User"}
+                                className="h-9 w-9 rounded-full object-cover border"
+                              />
+                              <div className="truncate">
+                                <div className="font-medium truncate text-base">{post.title}</div>
+                                <div className="text-xs text-slate-500 truncate">by {post.user?.name || "Anonymous"}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-xs px-2.5 py-1 shrink-0 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">{Math.round(r.score * 100)}% match</span>
+                        </div>
+                        <p className="text-[15px] text-slate-700 mt-2">{post.content}</p>
+
+                        {/* Media preview */}
+                        {Array.isArray(post.media_urls) && post.media_urls.length > 0 && (
+                          <div className="mt-3 grid grid-cols-3 gap-3">
+                            {post.media_urls.slice(0, 3).map((url, i) => (
+                              <img key={i} src={url} alt="attachment" className="h-36 w-full object-cover rounded-lg border" />
+                            ))}
+                          </div>
+                        )}
+
+                        {r.matched.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {r.matched.slice(0, 10).map((m, i) => (
+                              <span key={i} className="text-[12px] px-2.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">{m}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
