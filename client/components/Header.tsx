@@ -43,7 +43,7 @@ export default function Header() {
             <div className="hidden md:flex items-center space-x-8">
               <a href="/skills" className="text-gray-600 hover:text-gray-900 transition-colors">Skills</a>
               <a href="/trades" className="text-gray-600 hover:text-gray-900 transition-colors">Trades</a>
-              <a href="/about" className="text-gray-600 hover:text-gray-900 transition-colors">About</a>
+              <a href="/resume" className="text-gray-600 hover:text-gray-900 transition-colors">Resume</a>
               {isAuthenticated && (
                 <a href="/feed" className="text-gray-600 hover:text-gray-900 transition-colors">Feed</a>
               )}
@@ -174,11 +174,11 @@ export default function Header() {
                 Trades
               </a>
               <a 
-                href="/about" 
+                href="/resume" 
                 className="block px-2 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                About
+                Resume
               </a>
               {isAuthenticated && (
                 <a 

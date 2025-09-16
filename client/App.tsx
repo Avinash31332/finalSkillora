@@ -13,6 +13,8 @@ import Index from "./pages/Index";
 import Skills from "./pages/Skills";
 import Trades from "./pages/Trades";
 import About from "./pages/About";
+import ResumePage from "./pages/Resume";
+import EditResumePage from "./pages/EditResume";
 import CreateProfile from "./pages/CreateProfile";
 import SocialFeed from "./pages/SocialFeed";
 import CreatePost from "./pages/CreatePost";
@@ -43,7 +45,10 @@ const App = () => (
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/skills" element={<Skills />} />
                 <Route path="/trades" element={<Trades />} />
+                {/* About removed from header; route kept if directly visited */}
                 <Route path="/about" element={<About />} />
+                <Route path="/resume" element={<ResumePage />} />
+                <Route path="/resume/edit" element={<EditResumePage />} />
                 <Route path="/create-profile" element={<CreateProfile />} />
                 <Route path="/feed" element={<SocialFeed />} />
                 <Route path="/create-post" element={<CreatePost />} />

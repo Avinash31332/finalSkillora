@@ -464,6 +464,92 @@ BEGIN
   END IF;
 END $$;
 
+-- =============================================
+-- Resumes: per-user resume data (single row per user)
+-- Stored as structured JSON for flexibility and easy updates
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS public.resumes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+    full_name TEXT NOT NULL,
+    headline TEXT,
+    email TEXT,
+    phone TEXT,
+    location TEXT,
+    links JSONB DEFAULT '[]', -- [{label, url}]
+    summary TEXT,
+    education JSONB DEFAULT '[]', -- [{school, degree, duration, details}]
+    technical_skills JSONB DEFAULT '[]', -- [{section, items: []}]
+    experience JSONB DEFAULT '[]', -- [{company, role, duration, bullets: []}]
+    projects JSONB DEFAULT '[]', -- [{name, description, bullets: [], links: []}]
+    achievements JSONB DEFAULT '[]', -- [string]
+    certifications JSONB DEFAULT '[]', -- [{name, issuer, year}]
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Ensure RLS and secure access (owner-only)
+ALTER TABLE public.resumes ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='resumes' AND policyname='Users can view their own resume'
+  ) THEN
+    CREATE POLICY "Users can view their own resume" ON public.resumes
+      FOR SELECT USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='resumes' AND policyname='Users can create their resume'
+  ) THEN
+    CREATE POLICY "Users can create their resume" ON public.resumes
+      FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='resumes' AND policyname='Users can update their resume'
+  ) THEN
+    CREATE POLICY "Users can update their resume" ON public.resumes
+      FOR UPDATE USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='resumes' AND policyname='Users can delete their resume'
+  ) THEN
+    CREATE POLICY "Users can delete their resume" ON public.resumes
+      FOR DELETE USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+-- Updated timestamp trigger for resumes
+CREATE OR REPLACE FUNCTION public.touch_resumes_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS touch_resumes_updated_at_trigger ON public.resumes;
+CREATE TRIGGER touch_resumes_updated_at_trigger
+  BEFORE UPDATE ON public.resumes
+  FOR EACH ROW EXECUTE FUNCTION public.touch_resumes_updated_at();
+
 -- Users can insert their own posts
 DO $$
 BEGIN
