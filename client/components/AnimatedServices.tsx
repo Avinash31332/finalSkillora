@@ -138,13 +138,13 @@ const AnimatedServices: React.FC = () => {
           Tailored Services for Your
           <br />
           <span className="text-green-400">Skill Growth</span>
-        </h1>
+        </h1>991
         <div className="mt-8 flex items-center">
           <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center mr-4">
             <span className="text-black font-bold text-lg">ST</span>
           </div>
           <div>
-            <div className="text-white font-semibold">SkillTrade</div>
+            <div className="text-white font-semibold">SkillOra</div>
             <div className="text-gray-400 text-sm">Skill Exchange Platform</div>
           </div>
         </div>

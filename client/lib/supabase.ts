@@ -9,6 +9,53 @@ export const supabase = createClient(supabaseUrl, supabaseKey)
 export type Database = {
   public: {
     Tables: {
+      trades: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          skill_offered: string
+          skill_wanted: string
+          user_id: string
+          user_display_name: string
+          status: 'Open' | 'Closed' | 'Assigned' | 'Completed'
+          comments: any[] | null
+          location: string | null
+          deadline: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          skill_offered: string
+          skill_wanted: string
+          user_id: string
+          user_display_name: string
+          status?: 'Open' | 'Closed' | 'Assigned' | 'Completed'
+          comments?: any[] | null
+          location?: string | null
+          deadline?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          skill_offered?: string
+          skill_wanted?: string
+          user_id?: string
+          user_display_name?: string
+          status?: 'Open' | 'Closed' | 'Assigned' | 'Completed'
+          comments?: any[] | null
+          location?: string | null
+          deadline?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       profiles: {
         Row: {
           id: string

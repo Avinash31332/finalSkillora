@@ -48,7 +48,7 @@ export default function SignIn() {
           </div>
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
           <CardDescription>
-            Sign in to your SkillTrade account
+            Sign in to your SkillOra account
           </CardDescription>
         </CardHeader>
         <CardContent>

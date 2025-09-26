@@ -74,7 +74,7 @@ export default function Index() {
                 <span className="block">grow your business</span>
               </h1>
 
-              <p className="text-lg text-gray-600 max-w-lg leading-relaxed">
+              <p className="text-lg text-gray-600 max-w-lg leading-relaxed ">
                 Unlock growth and collaboration with our skill trading platform.
                 From seamless skill exchange to cutting-edge collaboration
                 tools, we help your talents thrive in a cooperative world. Let's
@@ -88,7 +88,11 @@ export default function Index() {
                 onClick={handleGetStartedClick}
                 className="bg-primary hover:bg-primary/90 text-white px-8 py-3 text-base"
               >
-                {!isAuthenticated ? "Get Started →" : !hasProfile ? "Create Profile →" : "Let's Trade →"}
+                {!isAuthenticated
+                  ? "Get Started →"
+                  : !hasProfile
+                    ? "Create Profile →"
+                    : "Let's Trade →"}
               </Button>
               <Button
                 onClick={handleMessagesClick}
@@ -129,6 +133,9 @@ export default function Index() {
                 SkillSwap
               </span>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500 drop-shadow-lg">
+                Code movie
+              </span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500 drop-shadow-lg">
                 WorkTrade
               </span>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500 drop-shadow-lg">
@@ -142,6 +149,9 @@ export default function Index() {
               </span>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500 drop-shadow-lg">
                 SkillSwap
+              </span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500 drop-shadow-lg">
+                Code movie
               </span>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-500 drop-shadow-lg">
                 WorkTrade
@@ -386,7 +396,7 @@ export default function Index() {
                   <span className="text-white font-bold text-sm">ST</span>
                 </div>
                 <span className="text-xl font-semibold text-gray-900">
-                  SkillTrade
+                  SkillOra
                 </span>
               </div>
               <p className="text-gray-600 text-sm leading-relaxed">
@@ -484,7 +494,7 @@ export default function Index() {
           <div className="border-t border-gray-200 mt-12 pt-8">
             <div className="text-center space-y-2">
               <div className="text-gray-600 text-sm">
-                © 2024 SkillTrade. All rights reserved.
+                © 2024 SkillOra. All rights reserved.
               </div>
               <div className="text-gray-600 text-sm">Mohammed Shahzaman</div>
             </div>

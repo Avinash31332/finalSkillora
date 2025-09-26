@@ -99,7 +99,7 @@ export default function SignUp() {
           </div>
           <CardTitle className="text-2xl">Create Account</CardTitle>
           <CardDescription>
-            Join SkillTrade and start trading your skills
+            Join SkillOra and start trading your skills
           </CardDescription>
         </CardHeader>
         <CardContent>

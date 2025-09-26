@@ -1,7 +1,7 @@
-# SkillTrade Authentication Setup Guide
+# SkillOra Authentication Setup Guide
 
 ## Overview
-This guide will help you set up the complete authentication system for SkillTrade using Supabase.
+This guide will help you set up the complete authentication system for SkillOra using Supabase.
 
 ## Prerequisites
 - Supabase account and project
@@ -109,7 +109,7 @@ profiles (
   bio TEXT,
   location TEXT,
   profile_picture TEXT,
-  skills_i_have TEXT[],
+  _i_have TEXT[],
   skills_i_want TEXT[],
   top_skills TEXT[],
   experience_level TEXT,

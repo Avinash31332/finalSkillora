@@ -163,7 +163,7 @@ export default function CreateProfile() {
       <div className="container mx-auto px-4 max-w-2xl">
         <Card>
           <CardHeader>
-            <CardTitle>Create Your SkillTrade Profile</CardTitle>
+            <CardTitle>Create Your SkillOra Profile</CardTitle>
             <CardDescription>
               Join our community of professionals trading skills and growing together
             </CardDescription>

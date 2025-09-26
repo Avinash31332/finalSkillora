@@ -36,16 +36,19 @@ export default function Header() {
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">ST</span>
               </div>
-              <span className="text-xl font-semibold text-gray-900">SkillTrade</span>
+              <span className="text-xl font-semibold text-gray-900">SkillOra</span>
             </a>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-8">
-              <a href="/skills" className="text-gray-600 hover:text-gray-900 transition-colors">Skills</a>
+              <a href="/skills" className="text-gray-600 hover:text-gray-900 transition-colors">Skills Certifications</a>
               <a href="/trades" className="text-gray-600 hover:text-gray-900 transition-colors">Trades</a>
               <a href="/resume" className="text-gray-600 hover:text-gray-900 transition-colors">Resume</a>
               {isAuthenticated && (
-                <a href="/feed" className="text-gray-600 hover:text-gray-900 transition-colors">Feed</a>
+                <>
+                  <a href="/feed" className="text-gray-600 hover:text-gray-900 transition-colors">Post</a>
+                  <a href="/chat" className="text-gray-600 hover:text-gray-900 transition-colors">Chat</a>
+                </>
               )}
             </div>
           </div>
@@ -64,6 +67,16 @@ export default function Header() {
 
           {/* Right side */}
           <div className="flex items-center space-x-4">
+            {/* Movella Button */}
+            <div className="hidden md:block">
+              <Button
+                onClick={() => navigate("/movella")}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
+              >
+                Movella
+              </Button>
+            </div>
+            
             {/* Desktop Auth */}
             <div className="hidden md:flex items-center space-x-4">
               {isAuthenticated ? (
@@ -180,14 +193,32 @@ export default function Header() {
               >
                 Resume
               </a>
+              <Button
+                onClick={() => {
+                  navigate("/movella");
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
+              >
+                Movella
+              </Button>
               {isAuthenticated && (
-                <a 
-                  href="/feed" 
-                  className="block px-2 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Feed
-                </a>
+                <>
+                  <a 
+                    href="/feed" 
+                    className="block px-2 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Post
+                  </a>
+                  <a 
+                    href="/chat" 
+                    className="block px-2 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Chat
+                  </a>
+                </>
               )}
             </div>
 
@@ -199,7 +230,7 @@ export default function Header() {
                     <div className="flex items-center space-x-3 p-2">
                       <Avatar className="h-10 w-10">
                         <AvatarImage
-                          src={profile.profilePicture || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face"}
+                          src={profile.profile_picture || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face"}
                           alt={profile.name || "User"}
                         />
                         <AvatarFallback>

@@ -99,16 +99,25 @@ export async function sendMessage(currentUserId: string, otherUserId: string, co
 export type Unsubscribe = () => void;
 
 export function subscribeToIncoming(currentUserId: string, onInsert: (m: MessageRow) => void): Unsubscribe {
+  // Subscribe with server-side filters for lower noise and more reliable realtime
   const channel = supabase
-    .channel("messages_realtime")
+    .channel(`messages_realtime_${currentUserId}`)
+    // New messages where I am the receiver
     .on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "messages" },
+      { event: "INSERT", schema: "public", table: "messages", filter: `receiver_id=eq.${currentUserId}` },
       (payload) => {
         const m = payload.new as MessageRow;
-        if (m.receiver_id === currentUserId || m.sender_id === currentUserId) {
-          onInsert(m);
-        }
+        onInsert(m);
+      }
+    )
+    // New messages I just sent (to reflect instantly across tabs/devices)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "messages", filter: `sender_id=eq.${currentUserId}` },
+      (payload) => {
+        const m = payload.new as MessageRow;
+        onInsert(m);
       }
     )
     .subscribe();

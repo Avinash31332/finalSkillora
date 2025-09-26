@@ -120,7 +120,7 @@ const ServicesShowcase: React.FC = () => {
                 <span className="text-black font-bold text-lg">ST</span>
               </div>
               <div>
-                <div className="text-white font-semibold">SkillTrade</div>
+                <div className="text-white font-semibold">SkillOra</div>
                 <div className="text-gray-400 text-sm">
                   Skill Exchange Platform
                 </div>

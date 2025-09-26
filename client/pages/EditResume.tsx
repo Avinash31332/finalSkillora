@@ -4,10 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useEffect, useState } from "react";
 import { fetchMyResume, upsertMyResume, Resume } from "@/lib/resume.service";
+import { generateResumeWithAI, saveGeminiApiKey, getGeminiApiKey, AIResumeRequest } from "@/lib/ai-resume.service";
 import { useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles, Settings } from "lucide-react";
 import { useProfile } from "@/contexts/ProfileContext";
 
 type FormState = {
@@ -45,6 +47,9 @@ export default function EditResumePage() {
   });
   const [saving, setSaving] = useState(false);
   const [mySkills, setMySkills] = useState<string>("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [apiKey, setApiKey] = useState<string>("");
+  const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -72,11 +77,162 @@ export default function EditResumePage() {
       if (mounted && profile?.skills_i_have) {
         setMySkills((profile.skills_i_have as string[]).join(", "));
       }
+      // Load existing API key
+      if (mounted) {
+        setApiKey(getGeminiApiKey() || "");
+      }
     })();
     return () => { mounted = false };
   }, [profile]);
 
-  const update = (key: keyof FormState, value: string) => setForm(prev => ({ ...prev, [key]: value }));
+  const update = (key: keyof FormState, value: string) => {
+    console.log(`Updating ${key} to:`, value);
+    setForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const saveResumeToDatabase = async (formData: FormState) => {
+    try {
+      const resume: Omit<Resume, "user_id"> = {
+        full_name: formData.full_name.trim(),
+        headline: formData.headline.trim() || undefined,
+        email: formData.email.trim() || undefined,
+        phone: formData.phone.trim() || undefined,
+        location: formData.location.trim() || undefined,
+        links: formData.links.split(/\n+/).filter(Boolean).map(line => {
+          const [label, url] = line.split("|").map(s => s.trim());
+          return { label, url };
+        }),
+        summary: formData.summary.trim() || undefined,
+        education: formData.education.split(/\n+/).filter(Boolean).map(line => {
+          const [school, degree, duration] = line.split("|").map(s => s.trim());
+          return { school, degree, duration };
+        }),
+        technical_skills: formData.skills.split(/\n+/).filter(Boolean).map(line => {
+          const [section, items] = line.split(":");
+          const list = (items || "").split(",").map(s => s.trim()).filter(Boolean);
+          return { section: (section || "").trim(), items: list };
+        }),
+        experience: formData.experience.split(/\n\n+/).filter(Boolean).map(block => {
+          const lines = block.split(/\n+/).filter(Boolean);
+          const [header, ...rest] = lines;
+          const [role, company, duration] = (header || "").split("|").map(s => s.trim());
+          const bullets = rest.map(l => l.replace(/^\-\s*/, "").trim()).filter(Boolean);
+          return { company: company || "", role, duration, bullets };
+        }),
+        projects: formData.projects.split(/\n\n+/).filter(Boolean).map(block => {
+          const lines = block.split(/\n+/).filter(Boolean);
+          const [name, ...rest] = lines;
+          const bullets = rest.map(l => l.replace(/^\-\s*/, "").trim()).filter(Boolean);
+          return { name: name || "", bullets };
+        }),
+        achievements: formData.achievements.split(/\n+/).map(s => s.trim()).filter(Boolean),
+        certifications: formData.certifications.split(/\n+/).filter(Boolean).map(line => {
+          const [name, issuer, year] = line.split("|").map(s => s.trim());
+          return { name, issuer, year };
+        }),
+      };
+      
+      await upsertMyResume(resume);
+      
+      // Update profile skills_i_have
+      const parsedSkills = mySkills
+        .split(/[,\n]+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+      if (parsedSkills.length > 0) {
+        await updateProfile({ skills_i_have: parsedSkills as any });
+      }
+      
+      console.log("Resume saved to database successfully!");
+    } catch (error) {
+      console.error("Error saving resume to database:", error);
+      throw error;
+    }
+  };
+
+  const generateWithAI = async () => {
+    if (!form.full_name.trim()) {
+      alert("Please enter your full name first");
+      return;
+    }
+
+    setAiGenerating(true);
+    try {
+      const aiRequest: AIResumeRequest = {
+        full_name: form.full_name,
+        headline: form.headline,
+        email: form.email,
+        phone: form.phone,
+        location: form.location,
+        summary: form.summary,
+        education: form.education,
+        skills: form.skills,
+        experience: form.experience,
+        projects: form.projects,
+        achievements: form.achievements,
+        certifications: form.certifications,
+      };
+
+      const aiResume = await generateResumeWithAI(aiRequest);
+      console.log("AI Resume generated:", aiResume);
+      console.log("AI Resume keys:", Object.keys(aiResume));
+      console.log("AI Resume full_name:", aiResume.full_name);
+      console.log("AI Resume summary:", aiResume.summary);
+      console.log("AI Resume location:", aiResume.location);
+      console.log("AI Resume technical_skills:", aiResume.technical_skills);
+      
+      // Update form with AI-generated content
+      const newForm = {
+        full_name: aiResume.full_name || form.full_name,
+        headline: aiResume.headline || "",
+        email: aiResume.email || "",
+        phone: aiResume.phone || "",
+        location: aiResume.location || "",
+        links: "", // AI doesn't generate links
+        summary: aiResume.summary || "",
+        education: (aiResume.education || []).map(e => [e.school, e.degree, e.duration].filter(Boolean).join(" | ")).join("\n"),
+        skills: (aiResume.technical_skills || []).map(s => `${s.section}: ${s.items.join(", ")}`).join("\n"),
+        experience: (aiResume.experience || []).map(exp => [`${exp.role || ""} | ${exp.company} | ${exp.duration || ""}`, ...exp.bullets.map(b => `- ${b}`)].join("\n")).join("\n\n"),
+        projects: (aiResume.projects || []).map(p => [p.name, ...(p.bullets || []).map(b => `- ${b}`)].join("\n")).join("\n\n"),
+        achievements: (aiResume.achievements || []).join("\n"),
+        certifications: (aiResume.certifications || []).map(c => [c.name, c.issuer, c.year].filter(Boolean).join(" | ")).join("\n"),
+      };
+      
+      console.log("New form data:", newForm);
+      console.log("New form full_name:", newForm.full_name);
+      console.log("New form summary:", newForm.summary);
+      
+      // Update form state
+      setForm(newForm);
+      
+      // Show saving message
+      alert("Resume generated! Now saving to database...");
+      
+      // Automatically save to database
+      await saveResumeToDatabase(newForm);
+      
+      // Show success message
+      alert("Resume generated and saved successfully! You can now view it or make edits.");
+      
+      // Force re-render by updating a dummy state
+      setTimeout(() => {
+        setForm(prev => ({ ...prev }));
+      }, 50);
+    } catch (error) {
+      console.error("AI Generation Error:", error);
+      alert(`Failed to generate resume: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const saveApiKey = () => {
+    if (apiKey.trim()) {
+      saveGeminiApiKey(apiKey.trim());
+      setShowApiKeyDialog(false);
+      alert("API key saved successfully!");
+    }
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,7 +315,90 @@ export default function EditResumePage() {
         )}
         <Card>
           <CardHeader>
-            <CardTitle>Build Your Resume</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Build Your Resume</CardTitle>
+              <div className="flex items-center gap-2">
+                <Dialog open={showApiKeyDialog} onOpenChange={setShowApiKeyDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Settings className="w-4 h-4 mr-2" />
+                      API Key
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Gemini API Key</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="api-key">Enter your Gemini API Key</Label>
+                        <Input
+                          id="api-key"
+                          type="password"
+                          value={apiKey}
+                          onChange={(e) => setApiKey(e.target.value)}
+                          placeholder="AIza..."
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Get your API key from <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline">Google AI Studio</a>
+                        </p>
+                      </div>
+                      <Button onClick={saveApiKey} className="w-full">Save API Key</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Button 
+                  onClick={generateWithAI} 
+                  disabled={aiGenerating || !form.full_name.trim()}
+                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
+                >
+                  {aiGenerating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      AI Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Generate with AI
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  onClick={() => {
+                    console.log("Testing manual form update...");
+                    const testData = {
+                      full_name: "Tejas",
+                      headline: "Full Stack Developer & Software Engineer",
+                      email: "tejas.email@example.com",
+                      phone: "123-456-7890",
+                      location: "Hyderabad, India",
+                      links: "LinkedIn|https://linkedin.com/in/tejas\nGitHub|https://github.com/tejas",
+                      summary: "Experienced software engineer with 3+ years in full-stack development, specializing in Python, JavaScript, React. Proven ability to deliver scalable solutions and work effectively in team environments. Seeking opportunities to contribute technical expertise to innovative projects.",
+                      education: "University of California, Berkeley | Bachelor of Science in Computer Science | 2018 - 2022",
+                      skills: "Programming Languages: Python, JavaScript, Java, SQL\nFrameworks & Tools: React, Node.js, Express.js, Django, Git, Docker\nOther Skills: AWS, MongoDB, PostgreSQL, Problem Solving, Team Collaboration",
+                      experience: "Software Engineer | TechCorp Solutions | 2021 - Present\n- Developed scalable web applications using React and Node.js\n- Implemented microservices architecture, improving system performance by 40%\n- Collaborated with cross-functional teams to deliver new features\n- Mentored junior developers and maintained code quality standards\n\nFull Stack Developer | StartupXYZ | 2020 - 2021\n- Built RESTful APIs using Node.js and Express\n- Developed responsive frontend components with React\n- Implemented automated testing with Jest\n- Deployed applications on AWS using Docker",
+                      projects: "E-Commerce Platform\n- Developed using React, Node.js, and MongoDB\n- Implemented secure payment integration with Stripe\n- Built real-time inventory tracking system\n\nAnalytics Dashboard\n- Created using Python and React\n- Implemented data visualization components\n- Integrated with multiple data sources via REST APIs",
+                      achievements: "Won 'Best Innovation Award' at TechCrunch Disrupt 2023\nImproved application performance by 60% through optimization\nMentored junior developers with 100% promotion rate\nCompleted AWS Solutions Architect certification",
+                      certifications: "AWS Certified Solutions Architect | Amazon Web Services | 2023\nCertified Scrum Master | Scrum Alliance | 2022"
+                    };
+                    
+                    console.log("Setting test data:", testData);
+                    setForm(testData);
+                    
+                    // Force re-render
+                    setTimeout(() => {
+                      setForm(prev => ({ ...prev }));
+                      alert("Complete test data populated! Check all fields.");
+                    }, 100);
+                  }}
+                  variant="outline"
+                  size="sm"
+                >
+                  Test Fill All
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <form className="space-y-6" onSubmit={onSubmit}>

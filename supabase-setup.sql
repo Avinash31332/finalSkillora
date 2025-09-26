@@ -17,6 +17,22 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Create trades table
+CREATE TABLE IF NOT EXISTS public.trades (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  skill_offered TEXT NOT NULL,
+  skill_wanted TEXT NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_display_name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'Closed', 'Assigned', 'Completed')),
+  comments JSONB DEFAULT '[]'::jsonb,
+  location TEXT,
+  deadline DATE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 -- =============================================
 -- Minimal Direct Messages Schema (Reset + Setup)
@@ -41,7 +57,12 @@ CREATE TABLE IF NOT EXISTS public.messages (
   sender_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   receiver_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   content text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
+  message_type text DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'file', 'system')),
+  status text DEFAULT 'sent' CHECK (status IN ('sent', 'delivered', 'read')),
+  reply_to uuid REFERENCES public.messages(id),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  read_at timestamptz
 );
 
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
@@ -68,8 +89,78 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Typing indicators table
+CREATE TABLE IF NOT EXISTS public.typing_indicators (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  target_user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  is_typing boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.typing_indicators ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view typing indicators for their conversations" ON public.typing_indicators
+  FOR SELECT USING (auth.uid() = user_id OR auth.uid() = target_user_id);
+
+CREATE POLICY "Users can insert their own typing indicators" ON public.typing_indicators
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own typing indicators" ON public.typing_indicators
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own typing indicators" ON public.typing_indicators
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Online status table
+CREATE TABLE IF NOT EXISTS public.user_status (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+  is_online boolean NOT NULL DEFAULT false,
+  last_seen timestamptz DEFAULT now(),
+  status_message text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.user_status ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view all online status" ON public.user_status
+  FOR SELECT USING (true);
+
+CREATE POLICY "Users can insert their own status" ON public.user_status
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own status" ON public.user_status
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own status" ON public.user_status
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Add triggers for updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_typing_indicators_updated_at BEFORE UPDATE ON public.typing_indicators
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_user_status_updated_at BEFORE UPDATE ON public.user_status
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Realtime setup
 ALTER TABLE public.messages REPLICA IDENTITY FULL;
+ALTER TABLE public.typing_indicators REPLICA IDENTITY FULL;
+ALTER TABLE public.user_status REPLICA IDENTITY FULL;
+
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_publication_tables
@@ -77,11 +168,24 @@ DO $$ BEGIN
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename='typing_indicators'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.typing_indicators;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename='user_status'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.user_status;
+  END IF;
 END $$;
 
 
 -- Enable Row Level Security
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.trades ENABLE ROW LEVEL SECURITY;
 
 -- Create policies
 -- Users can read all profiles
@@ -352,6 +456,59 @@ BEGIN
       AND policyname='Users can delete their own profile'
   ) THEN
     CREATE POLICY "Users can delete their own profile" ON public.profiles
+      FOR DELETE USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+-- Create policies for trades
+-- Users can read all trades
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='trades'
+      AND policyname='Users can read all trades'
+  ) THEN
+    CREATE POLICY "Users can read all trades" ON public.trades
+      FOR SELECT USING (true);
+  END IF;
+END $$;
+
+-- Users can insert their own trades
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='trades'
+      AND policyname='Users can insert their own trades'
+  ) THEN
+    CREATE POLICY "Users can insert their own trades" ON public.trades
+      FOR INSERT WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+
+-- Users can update their own trades
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='trades'
+      AND policyname='Users can update their own trades'
+  ) THEN
+    CREATE POLICY "Users can update their own trades" ON public.trades
+      FOR UPDATE USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+-- Users can delete their own trades
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname='public' AND tablename='trades'
+      AND policyname='Users can delete their own trades'
+  ) THEN
+    CREATE POLICY "Users can delete their own trades" ON public.trades
       FOR DELETE USING (auth.uid() = user_id);
   END IF;
 END $$;
@@ -1121,5 +1278,16 @@ BEGIN
     WHERE pubname = 'supabase_realtime' AND schemaname='public' AND tablename='conversation_participants'
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.conversation_participants;
+  END IF;
+END $$;
+
+-- Add trades table to realtime publication
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname='public' AND tablename='trades'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.trades;
   END IF;
 END $$;

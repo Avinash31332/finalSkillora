@@ -21,11 +21,15 @@ import CreatePost from "./pages/CreatePost";
 import Profile from "./pages/Profile";
 import EditProfile from "./pages/EditProfile";
 import Messages from "./pages/Messages";
+import RealtimeMessages from "./pages/RealtimeMessages";
 import Settings from "./pages/Settings";
 import SignUp from "./pages/SignUp";
 import SignIn from "./pages/SignIn";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
+import Hero from "./pages/movella/Hero";
+import Header from "./pages/movella/Header";
+import LoadingOverlay from "./pages/movella/LoadingOverlay";
 
 const queryClient = new QueryClient();
 
@@ -54,7 +58,9 @@ const App = () => (
                 <Route path="/create-post" element={<CreatePost />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/edit-profile" element={<EditProfile />} />
+                <Route path="/movella" element={<Hero />} />
                 <Route path="/messages" element={<Messages />} />
+                <Route path="/chat" element={<RealtimeMessages />} />
                 <Route path="/settings" element={<Settings />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />

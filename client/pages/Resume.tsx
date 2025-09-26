@@ -6,7 +6,7 @@ import { fetchMyResume, Resume } from "@/lib/resume.service";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProfile } from "@/contexts/ProfileContext";
 import { useNavigate } from "react-router-dom";
-import { Briefcase, GraduationCap, Cpu, Trophy, Award, FolderGit2, Mail, Phone, MapPin, Link2, Sparkles } from "lucide-react";
+import { Briefcase, GraduationCap, Cpu, Trophy, Award, FolderGit2, Mail, Phone, MapPin, Link2, Sparkles, Loader2 } from "lucide-react";
 import { usePosts } from "@/contexts/PostsContext";
 
 export default function ResumePage() {
@@ -18,6 +18,7 @@ export default function ResumePage() {
   const [smartLoading, setSmartLoading] = useState(false);
   const [smartOpen, setSmartOpen] = useState(false);
   const [smartResults, setSmartResults] = useState<{ id: string; score: number; matched: string[] }[]>([]);
+  const [currentAnalysisStep, setCurrentAnalysisStep] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -90,34 +91,136 @@ export default function ResumePage() {
   function computeSmartTrades() {
     setSmartOpen(true);
     setSmartLoading(true);
+    setCurrentAnalysisStep("");
+    
     // Ensure we have latest posts
     refreshPosts();
     const skillSections = resume.technical_skills || [];
     const resumeSkills = skillSections.flatMap(s => s.items || []);
     const mySkills = Array.isArray(profile?.skills_i_have) ? (profile!.skills_i_have as string[]) : [];
-    const allSkillTokens = tokenize([...resumeSkills, ...mySkills]);
+    
+    // Get all unique skills from resume and profile
+    const allSkills = [...new Set([...resumeSkills, ...mySkills])].filter(skill => skill.trim().length > 0);
+    
+    // Create skill variations for better matching (e.g., "Python" matches "python", "Python3", "Python 3")
+    const skillVariations = allSkills.map(skill => {
+      const base = skill.toLowerCase().trim();
+      return {
+        original: skill,
+        variations: [
+          base,
+          base + '3',
+          base + ' 3',
+          base + '2',
+          base + ' 2',
+          base.replace(/\s+/g, ''), // Remove spaces
+          base.replace(/[^a-z0-9]/g, ''), // Remove special chars
+        ]
+      };
+    });
 
     const results = posts.map(p => {
-      const postSkills = [
+      const postContent = [
         ...(p.skills_offered || []),
         ...(p.skills_needed || []),
         p.title || "",
         p.content || ""
-      ];
-      const postTokens = tokenize(postSkills);
-      const matched = allSkillTokens.filter(t => postTokens.some(pt => pt.includes(t) || t.includes(pt)));
-      const score = matched.length / Math.max(1, allSkillTokens.length);
-      return { id: p.id, score, matched };
-    })
-    .filter(r => r.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 20);
+      ].join(' ').toLowerCase();
 
-    // small delay to feel deliberate
-    setTimeout(() => {
-      setSmartResults(results);
-      setSmartLoading(false);
-    }, 700);
+      const matchedSkills = [];
+      const matchedVariations = [];
+
+      // Check for exact skill matches
+      for (const skillVar of skillVariations) {
+        const found = skillVar.variations.some(variation => {
+          // Check for exact word matches (not substring matches)
+          const regex = new RegExp(`\\b${variation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+          return regex.test(postContent);
+        });
+        
+        if (found) {
+          matchedSkills.push(skillVar.original);
+          matchedVariations.push(skillVar.original);
+        }
+      }
+
+      // Calculate score based on:
+      // 1. Number of skills matched
+      // 2. Relevance to post content
+      // 3. Skills offered vs skills needed alignment
+      let score = 0;
+      
+      if (matchedSkills.length > 0) {
+        // Base score from skill matches
+        score = matchedSkills.length / allSkills.length;
+        
+        // Bonus for skills offered in posts (you can provide these)
+        const offeredSkills = p.skills_offered || [];
+        const offeredMatches = matchedSkills.filter(skill => 
+          offeredSkills.some(offered => 
+            offered.toLowerCase().includes(skill.toLowerCase()) || 
+            skill.toLowerCase().includes(offered.toLowerCase())
+          )
+        );
+        
+        // Bonus for skills needed in posts (you have these)
+        const neededSkills = p.skills_needed || [];
+        const neededMatches = matchedSkills.filter(skill => 
+          neededSkills.some(needed => 
+            needed.toLowerCase().includes(skill.toLowerCase()) || 
+            skill.toLowerCase().includes(needed.toLowerCase())
+          )
+        );
+        
+        // Higher score for posts where you can provide offered skills or have needed skills
+        if (offeredMatches.length > 0) score += 0.3;
+        if (neededMatches.length > 0) score += 0.3;
+        
+        // Bonus for multiple skill matches
+        if (matchedSkills.length > 1) score += 0.2;
+      }
+
+      return { 
+        id: p.id, 
+        score, 
+        matched: matchedSkills,
+        offeredMatches: matchedSkills.filter(skill => 
+          (p.skills_offered || []).some(offered => 
+            offered.toLowerCase().includes(skill.toLowerCase()) || 
+            skill.toLowerCase().includes(offered.toLowerCase())
+          )
+        ),
+        neededMatches: matchedSkills.filter(skill => 
+          (p.skills_needed || []).some(needed => 
+            needed.toLowerCase().includes(skill.toLowerCase()) || 
+            skill.toLowerCase().includes(needed.toLowerCase())
+          )
+        )
+      };
+    })
+    .filter(r => r.score > 0 && r.matched.length > 0) // Only show posts with actual skill matches
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 15); // Show top 15 matches
+
+    // AI analysis simulation with progressive steps
+    const steps = [
+      "Analyzing your skills profile...",
+      "Scanning available opportunities...",
+      "Computing skill compatibility scores...",
+      "Ranking best matches...",
+      "Finalizing recommendations..."
+    ];
+    
+    let currentStep = 0;
+    const stepInterval = setInterval(() => {
+      setCurrentAnalysisStep(steps[currentStep]);
+      currentStep++;
+      if (currentStep >= steps.length) {
+        clearInterval(stepInterval);
+        setSmartResults(results);
+        setSmartLoading(false);
+      }
+    }, 800);
   }
 
   return (
@@ -127,9 +230,9 @@ export default function ResumePage() {
         <div className="flex justify-end gap-2 mb-6 print:hidden">
           <Button variant="outline" onClick={() => window.print()}>Download / Print</Button>
           <Button onClick={() => navigate("/resume/edit")}>Edit</Button>
-          <Button onClick={computeSmartTrades} className="bg-indigo-600 hover:bg-indigo-700 text-white inline-flex items-center gap-2">
-            <Sparkles size={16} />
-            Smart Trades
+          <Button onClick={computeSmartTrades} disabled={smartLoading} className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-70 text-white inline-flex items-center gap-2">
+            {smartLoading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            {smartLoading ? "Scanning…" : "Smart Trades"}
           </Button>
         </div>
 
@@ -382,11 +485,14 @@ export default function ResumePage() {
             <div className="p-6 overflow-y-auto h-full">
               {smartLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center text-slate-700">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-400 animate-pulse mb-3" />
-                  <div className="h-2 w-40 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-400 flex items-center justify-center mb-4">
+                    <Loader2 className="h-6 w-6 text-white animate-spin" />
+                  </div>
+                  <div className="h-2 w-60 bg-slate-100 rounded-full overflow-hidden mb-4">
                     <div className="h-full w-1/3 animate-[loading_1.4s_ease-in-out_infinite] bg-gradient-to-r from-indigo-400 via-indigo-600 to-indigo-400" />
                   </div>
-                  <p className="mt-3 text-sm">Scanning posts and matching your skills…</p>
+                  <p className="text-lg font-medium text-slate-800">AI Analysis in Progress</p>
+                  <p className="mt-2 text-sm text-slate-600">{currentAnalysisStep}</p>
                 </div>
               ) : smartResults.length === 0 ? (
                 <div className="text-center text-sm text-slate-600">No close matches yet. Try adding more specific skills.</div>
@@ -414,6 +520,54 @@ export default function ResumePage() {
                         </div>
                         <p className="text-[15px] text-slate-700 mt-2">{post.content}</p>
 
+                        {/* Skills Match Details */}
+                        <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span className="text-sm font-medium text-green-800">Skills Match</span>
+                          </div>
+                          <div className="space-y-2">
+                            {r.matched.length > 0 && (
+                              <div>
+                                <span className="text-xs font-medium text-green-700">Your Skills Found:</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {r.matched.map((skill, idx) => (
+                                    <span key={idx} className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full border border-green-200">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {r.offeredMatches.length > 0 && (
+                              <div>
+                                <span className="text-xs font-medium text-blue-700">You Can Provide:</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {r.offeredMatches.map((skill, idx) => (
+                                    <span key={idx} className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full border border-blue-200">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {r.neededMatches.length > 0 && (
+                              <div>
+                                <span className="text-xs font-medium text-purple-700">They Need:</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {r.neededMatches.map((skill, idx) => (
+                                    <span key={idx} className="text-xs px-2 py-1 bg-purple-100 text-purple-800 rounded-full border border-purple-200">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
                         {/* Media preview */}
                         {Array.isArray(post.media_urls) && post.media_urls.length > 0 && (
                           <div className="mt-3 grid grid-cols-3 gap-3">
@@ -423,13 +577,6 @@ export default function ResumePage() {
                           </div>
                         )}
 
-                        {r.matched.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-1.5">
-                            {r.matched.slice(0, 10).map((m, i) => (
-                              <span key={i} className="text-[12px] px-2.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">{m}</span>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     );
                   })}

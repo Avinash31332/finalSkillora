@@ -197,7 +197,7 @@ const Profile: React.FC = () => {
                     className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground hover:bg-gray-100 rounded"
                     title="Go to Feed"
                   >
-                    Feed
+                    Post
                   </button>
                   <span className="text-muted-foreground">•</span>
                   <button

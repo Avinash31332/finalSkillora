@@ -68,36 +68,38 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     if (!user) return;
 
+    // Per-user channel with server-side filter: only messages where I'm the receiver
     realtimeSubscription.current = supabase
-      .channel('notifications')
+      .channel(`notifications:${user.id}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
+          filter: `receiver_id=eq.${user.id}`,
         },
         (payload) => {
           const newMessage = payload.new as any;
-          
-          // Only show notification if message is not from current user
-          if (newMessage.sender_id !== user.id) {
-            // Get sender info
-            supabase
-              .from('profiles')
-              .select('name')
-              .eq('user_id', newMessage.sender_id)
-              .single()
-              .then(({ data: profile }) => {
-                addNotification({
-                  type: 'message',
-                  title: 'New Message',
-                  message: `${profile?.name || 'Someone'} sent you a message`,
-                  userId: newMessage.sender_id,
-                  userName: profile?.name,
-                });
+
+          // Skip self messages (shouldn't happen due to filter, but safe)
+          if (newMessage.sender_id === user.id) return;
+
+          // Fetch sender display name for notification
+          supabase
+            .from('profiles')
+            .select('name')
+            .eq('user_id', newMessage.sender_id)
+            .single()
+            .then(({ data: profile }) => {
+              addNotification({
+                type: 'message',
+                title: 'New Message',
+                message: `${profile?.name || 'Someone'} sent you a message`,
+                userId: newMessage.sender_id,
+                userName: profile?.name,
               });
-          }
+            });
         }
       )
       .on(
@@ -134,6 +136,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => {
       if (realtimeSubscription.current) {
         supabase.removeChannel(realtimeSubscription.current);
+        realtimeSubscription.current = null;
       }
     };
   }, [user]);
